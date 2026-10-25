@@ -1,0 +1,11 @@
+# Build outputs and caches
+*.app/
+ModuleCache/
+dist/
+*.dmg
+*.dmg.sha256
+*.iconset/
+.DS_Store
+# Generated integration results
+Tests/results.json
+Tests/export.pdf
