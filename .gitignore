@@ -9,3 +9,5 @@ dist/
 # Generated integration results
 Tests/results.json
 Tests/export.pdf
+.build/
+__pycache__/
