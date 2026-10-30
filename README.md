@@ -21,3 +21,9 @@
 限制：Markdown 文档最多 5 MB；图片最多 20 MB。图片限定在文档所在目录及其子目录，不加载远程图片、SVG 或越界符号链接。只读工具，不包含编辑、Mermaid 或数学公式扩展。最近文件路径和阅读设置保存在本机偏好设置中。
 
 未做 Apple 公证，其他 Mac 首次运行可能需要在系统设置中允许打开。当前在 macOS 15.7.5 Apple Silicon 实测；其他系统仍应实际运行验证。
+
+## ☕ 请我喝杯咖啡
+
+这个工具免费使用。如果它帮到了你，欢迎[请我喝杯咖啡](https://github.com/boyeye#-%E8%AF%B7%E6%88%91%E5%96%9D%E6%9D%AF%E5%92%96%E5%95%A1--buy-me-a-coffee)，用微信扫码即可，金额随意。谢谢支持 ❤️
+
+If you find it useful, you can [buy me a coffee](https://github.com/boyeye#-%E8%AF%B7%E6%88%91%E5%96%9D%E6%9D%AF%E5%92%96%E5%95%A1--buy-me-a-coffee).
