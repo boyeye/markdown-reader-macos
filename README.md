@@ -6,6 +6,7 @@
 - `Resources/reader.html`：排版与渲染模板。
 - `Resources/vendor/`：随应用离线打包的第三方库、版本记录和许可证。
 - `Assets/AppIcon-D1.svg`：当前图标（青底纸页、墨色 M、朱红印章）；`AppIcon-D1-small.svg` 是 16/32 px 用的简化版，`AppIcon-D1.icns` 由两者生成。旧图标 `AppIcon-D-down.*` 保留。
+- `make_icon.py`：由两个 SVG 生成 `AppIcon-D1.icns` 和 `AppIcon-D1.png`，用 `Assets/svg2png.swift`（WebKit）渲染以保留透明边距。不要用 qlmanage 转换，它会把透明区域填成白色。
 - `inline_katex_fonts.py`：把 KaTeX 字体以 data URI 嵌入 `Resources/vendor/katex.css`，供离线使用。
 - `Probe.swift`：早期工具链验证源码，正式应用不使用。
 - `Tests/Harness.swift`：真实 WebKit 渲染、PDF 导出与标签页路由的集成验证；`Tests/results.json` 为验证结果。
