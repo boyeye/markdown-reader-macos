@@ -1,5 +1,6 @@
 <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-__NONCE__'; style-src 'unsafe-inline'; img-src reader:; base-uri 'none'; form-action 'none'; connect-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-__NONCE__'; style-src 'unsafe-inline'; img-src reader:; font-src data:; base-uri 'none'; form-action 'none'; connect-src 'none'">
+<style>__KATEX_CSS__</style>
 <style>
 :root{color-scheme:light dark;--bg:#ffffff;--fg:#333333;--heading:#333333;--muted:#777777;--rule:#eeeeee;--line:#dfe2e5;--code:#f3f4f4;--pre:#f8f8f8;--pre-line:#e7eaed;--stripe:#f8f8f8;--accent:#4183c4;--mark:#fff3a3;--kw:#a626a4;--str:#50a14f;--num:#986801;--fn:#4078f2;--attr:#c18401;font-size:16px}
 @media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#363b40;--fg:#b8bfc6;--heading:#dedede;--muted:#8b949e;--rule:#474d54;--line:#4f555c;--code:#2f3338;--pre:#2b2f33;--pre-line:#45494e;--stripe:#3b4046;--accent:#93b8e8;--mark:#5c5326;--kw:#c792ea;--str:#a5c97a;--num:#f0a35e;--fn:#82aaff;--attr:#e6c07b}}
@@ -24,21 +25,79 @@ thead tr,tr{background:var(--bg)}tbody tr:nth-child(2n){background:var(--stripe)
 img{max-width:100%;height:auto}hr{height:2px;padding:0;margin:16px 0;background:var(--rule);border:0}
 mark{background:var(--mark);color:inherit}kbd{font-size:.9em;padding:2px 4px;border:1px solid var(--line);border-bottom-width:2px;border-radius:3px;background:var(--code)}
 ul:has(>li>input[type=checkbox]){padding-left:20px}li:has(>input[type=checkbox]){list-style:none}input[type=checkbox]{margin:0 .4em 0 -1.3em;accent-color:var(--accent)}
+.math-display{display:block;margin:1em 0;overflow-x:auto;overflow-y:hidden;text-align:center}.math-display .katex-display{margin:0}.math-error{color:#c0392b}
+.mermaid-diagram{margin:1em 0;overflow:auto;text-align:center}.mermaid-diagram svg{max-width:100%;height:auto}.diagram-error{text-align:left}.diagram-skipped{color:var(--muted);font-size:.85em}.diagram-error p{margin:0 0 .4em;color:#c0392b;font-size:.85em}
 .remote-image{display:block;border:1px dashed var(--line);color:var(--muted);padding:16px;border-radius:3px;font-size:.85em}
 .hljs-keyword,.hljs-selector-tag,.hljs-literal,.hljs-doctag{color:var(--kw)}.hljs-string,.hljs-regexp,.hljs-addition{color:var(--str)}.hljs-comment,.hljs-quote{color:var(--muted);font-style:italic}.hljs-number,.hljs-built_in,.hljs-type,.hljs-symbol{color:var(--num)}.hljs-title,.hljs-section,.hljs-function{color:var(--fn)}.hljs-attr,.hljs-attribute,.hljs-variable,.hljs-meta{color:var(--attr)}.hljs-deletion{color:#e45649}.hljs-subst{color:var(--fg)}
-@media(max-width:650px){main{padding:24px 20px 80px}}@media print{main{max-width:none;padding:0}pre,blockquote,table,img{break-inside:avoid}tbody tr:nth-child(2n){background:#f8f8f8}}
+@media(max-width:650px){main{padding:24px 20px 80px}}@media print{main{max-width:none;padding:0}pre,blockquote,table,img,.mermaid-diagram,.math-display{break-inside:avoid}tbody tr:nth-child(2n){background:#f8f8f8}}
 </style></head><body><main id="reader-content"></main>
-<script nonce="__NONCE__">__MARKED__</script><script nonce="__NONCE__">__PURIFY__</script><script nonce="__NONCE__">__HIGHLIGHT__</script>
+<script nonce="__NONCE__">__MARKED__</script><script nonce="__NONCE__">__PURIFY__</script><script nonce="__NONCE__">__HIGHLIGHT__</script><script nonce="__NONCE__">__KATEX__</script><script nonce="__NONCE__">__MERMAID__</script>
 <script nonce="__NONCE__">
 (()=>{'use strict';const content=document.getElementById('reader-content');
-window.setAppearance=(theme,size)=>{document.documentElement.dataset.theme=theme;document.documentElement.style.fontSize=size+'px'};
-window.renderMarkdown=text=>{
+const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]);
+// Budgets keep an untrusted document from tying up the renderer; anything over them stays as plain source text.
+const LIMITS={formulas:2000,formulaChars:5000,diagrams:50,diagramChars:50000,totalDiagramChars:300000};
+// Past the formula budget the tokenizers stop matching, so the rest of the text is parsed as plain text in large runs.
+let mathTokens=0;
+// $$…$$ blocks and $…$ inline math become placeholders holding the TeX source; KaTeX renders them after sanitizing.
+marked.use({extensions:[
+{name:'mathBlock',level:'block',start(src){if(mathTokens>=LIMITS.formulas)return;const m=/\n {0,3}\$\$/.exec(src);return m?m.index+1:undefined},
+tokenizer(src){if(mathTokens>=LIMITS.formulas)return;const m=/^ {0,3}\$\$([\s\S]{1,20000}?)\$\$[ \t]*(?:\n+|$)/.exec(src);if(m&&++mathTokens)return{type:'mathBlock',raw:m[0],text:m[1].trim()}},
+renderer(t){return '<div class="math-display">'+esc(t.text)+'</div>\n'}},
+{name:'mathInline',level:'inline',start(src){if(mathTokens>=LIMITS.formulas)return;return src.match(/(?<![\\$])\$(?:\$(?!\$)|(?![\s$]))/)?.index},
+tokenizer(src){if(mathTokens>=LIMITS.formulas)return;let m=/^\$\$((?:\\.|[^\\$]){1,5000}?)\$\$/.exec(src);if(m&&++mathTokens)return{type:'mathInline',raw:m[0],text:m[1].trim(),display:true};
+m=/^\$(?![\s$])((?:\\.|[^\\$\n]){1,5000}?)(?<!\s)\$(?!\d)/.exec(src);if(m&&++mathTokens)return{type:'mathInline',raw:m[0],text:m[1],display:false}},
+renderer(t){return '<span class="'+(t.display?'math-display':'math-inline')+'">'+esc(t.text)+'</span>'}}]});
+const renderMath=()=>{if(typeof katex==='undefined')return;let count=0;for(const el of content.querySelectorAll('.math-inline,.math-display')){const tex=el.textContent;
+if(++count>LIMITS.formulas||tex.length>LIMITS.formulaChars){el.classList.add('math-skipped');continue}
+try{katex.render(tex,el,{displayMode:el.classList.contains('math-display'),throwOnError:false,trust:false,strict:'ignore',maxSize:50,maxExpand:1000})}catch(_){el.textContent=tex;el.classList.add('math-error')}}};
+let diagrams=[],generation=0,lastDark=null;
+const isDark=()=>{const t=document.documentElement.dataset.theme;return t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches)};
+// Mermaid runs in strict mode without HTML labels, and its SVG is sanitized again before insertion.
+// Mermaid CSS may carry document-controlled values (classDef, style, init directives). Keep only plain style rules whose
+// every selector starts with this diagram's own id followed by a separator, with no sibling combinators, functional
+// pseudo-classes or nested rules, plus @keyframes; drop anything that loads a URL or escapes the diagram box.
+const RISKY_CSS=/url\(|@import|expression\(|position\s*:\s*(?:fixed|sticky)/i;
+const cleanStyles=(svg,id)=>{if(svg.id!==id){for(const st of svg.querySelectorAll('style'))st.remove()}const scoped=new RegExp('^#'+id+'(?![\\w-])');
+const safeSelector=sel=>scoped.test(sel)&&!/[~+&]|:(?:is|where|has|not|matches|host)\(/i.test(sel);
+for(const el of svg.querySelectorAll('[id]'))if(el.id===id)el.removeAttribute('id');
+for(const st of svg.querySelectorAll('style')){const sheet=new CSSStyleSheet();
+try{sheet.replaceSync(st.textContent)}catch(_){st.remove();continue}const keep=[];
+for(const r of sheet.cssRules){const text=r.cssText;if(RISKY_CSS.test(text))continue;
+if(r instanceof CSSStyleRule){if(!r.cssRules?.length&&r.selectorText.split(',').every(sel=>safeSelector(sel.trim())))keep.push(text)}
+else if(r instanceof CSSKeyframesRule)keep.push(text)}
+st.textContent=keep.join('\n')}
+for(const el of [svg,...svg.querySelectorAll('[style]')])if(RISKY_CSS.test(el.getAttribute('style')||''))el.removeAttribute('style')};
+const renderDiagrams=()=>{const done=renderAll();done.catch(()=>{});return done};
+const renderAll=async()=>{if(!diagrams.length||typeof mermaid==='undefined')return;const gen=++generation;lastDark=isDark();
+mermaid.initialize({startOnLoad:false,securityLevel:'strict',secure:['secure','securityLevel','startOnLoad','maxTextSize','maxEdges','suppressErrorRendering','themeCSS','htmlLabels','fontFamily','dompurifyConfig'],htmlLabels:false,theme:lastDark?'dark':'neutral',fontFamily:'"Helvetica Neue","PingFang SC",Arial,sans-serif',maxTextSize:50000,maxEdges:500});
+for(const [i,d] of diagrams.entries()){const id='mermaid-'+gen+'-'+i;let svg=null,failure=null;
+try{svg=(await mermaid.render(id,d.source)).svg}catch(e){failure=e}
+document.getElementById('d'+id)?.remove();if(gen!==generation)return;
+if(svg!==null){const frag=DOMPurify.sanitize(svg,{USE_PROFILES:{svg:true,svgFilters:true},ADD_TAGS:['style'],FORBID_TAGS:['image','foreignObject','script'],RETURN_DOM_FRAGMENT:true});
+for(const a of frag.querySelectorAll('a')){for(const attr of [...a.attributes])if(/href$/i.test(attr.name))a.removeAttributeNode(attr)}
+for(const el of frag.querySelectorAll('svg'))cleanStyles(el,id);for(const st of frag.querySelectorAll('style'))if(!st.closest('svg'))st.remove();
+d.el.classList.remove('diagram-error');d.el.replaceChildren(frag)}
+else{const note=document.createElement('p'),pre=document.createElement('pre'),code=document.createElement('code');note.textContent='Mermaid 图表无法渲染：'+(failure?.message||failure||'未知错误').toString().split('\n')[0];code.textContent=d.source;pre.append(code);d.el.classList.add('diagram-error');d.el.replaceChildren(note,pre)}}};
+// Pending until renderMarkdown runs, so a PDF export started while the page is still loading waits (or times out).
+// readerRenderId changes whenever readerReady is replaced (new document or theme re-render), so an export can tell
+// whether the page it waited for is still the page being printed.
+let markReady;window.readerReady=new Promise(resolve=>markReady=resolve);window.readerRenderId=0;
+const rerender=()=>{window.readerReady=renderDiagrams();window.readerRenderId++};
+window.setAppearance=(theme,size)=>{document.documentElement.dataset.theme=theme;document.documentElement.style.fontSize=size+'px';if(lastDark!==null&&lastDark!==isDark())rerender()};
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if(lastDark!==null&&lastDark!==isDark())rerender()});
+// revision identifies which document this page shows; PDF export only proceeds once it matches the app's current document.
+window.renderMarkdown=(text,revision)=>{mathTokens=0;window.readerRevision=revision;
 content.innerHTML=DOMPurify.sanitize(marked.parse(text,{gfm:true,breaks:false}),{USE_PROFILES:{html:true},FORBID_TAGS:['style','form','button','iframe','video','audio','source','object','embed','link','meta','base'],FORBID_ATTR:['style','id','name','srcset','background']});
 for(const img of content.querySelectorAll('img')){const src=img.getAttribute('src')||'';if(!src||/^(?:[a-z][a-z0-9+.-]*:|\/\/|\/)/i.test(src)){const note=document.createElement('span');note.className='remote-image';note.textContent='图片未加载：'+(img.alt||src||'未知图片')+'（仅支持文档目录内的本地图片）';img.replaceWith(note)}else{img.src=new URL(src,'reader://document/').href;img.loading='lazy';img.addEventListener('error',()=>{img.alt='无法加载本地图片：'+(img.alt||src)})}}
 for(const a of content.querySelectorAll('a')){const href=a.getAttribute('href')||'';if(href&&!href.startsWith('#')&&!/^(?:https?:|mailto:)/i.test(href)&&/^[a-z][a-z0-9+.-]*:/i.test(href)){a.removeAttribute('href')}}
 const headings=[...content.querySelectorAll('h1,h2,h3,h4,h5,h6')].map((h,i)=>{h.id='section-'+i;return{id:h.id,title:h.textContent,level:Number(h.tagName[1])}});
 const slugCounts=new Map();for(const h of content.querySelectorAll('h1,h2,h3,h4,h5,h6')){let slug=h.textContent.toLowerCase().trim().replace(/[^\p{L}\p{N}\s_-]/gu,'').replace(/\s/g,'-');const n=slugCounts.get(slug)||0;slugCounts.set(slug,n+1);if(n)slug+='-'+n;for(const a of content.querySelectorAll('a[href^="#"]')){try{if(decodeURIComponent(a.getAttribute('href').slice(1))===slug)a.href='#'+h.id}catch(_){}}}
+for(const code of content.querySelectorAll('pre>code.language-math')){const div=document.createElement('div');div.className='math-display';div.textContent=code.textContent;code.parentElement.replaceWith(div)}
+diagrams=[];let diagramChars=0;for(const code of content.querySelectorAll('pre>code.language-mermaid')){const size=code.textContent.length;
+if(diagrams.length>=LIMITS.diagrams||size>LIMITS.diagramChars||diagramChars+size>LIMITS.totalDiagramChars){const note=document.createElement('p');note.className='diagram-skipped';note.textContent='图表数量或大小超出上限，以下按源码显示。';code.parentElement.before(note);continue}
+diagramChars+=size;const div=document.createElement('div');div.className='mermaid-diagram';div.textContent=code.textContent;diagrams.push({el:div,source:code.textContent});code.parentElement.replaceWith(div)}
 for(const block of content.querySelectorAll('pre code')){try{hljs.highlightElement(block)}catch(_){}}
-window.webkit?.messageHandlers?.outline?.postMessage(headings);window.scrollTo(0,0);
+window.webkit?.messageHandlers?.outline?.postMessage(headings);renderMath();rerender();markReady(window.readerReady);window.scrollTo(0,0);
 };})();
 </script></body></html>

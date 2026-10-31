@@ -17,6 +17,7 @@ let welcome = #"""
 - **⌘F** 查找、**⌘O** 打开、**⌘R** 重新载入
 - 调整字号，切换浅色、深色或跟随系统
 - 支持表格、任务列表、引用和代码高亮
+- 支持数学公式，例如 $E=mc^2$，以及 Mermaid 图表
 - 同目录的本地图片可直接显示
 
 ## 代码示例
@@ -34,6 +35,7 @@ struct Reading {
 | --- | --- |
 | 离线阅读 | 已支持 |
 | 本地图片 | 已支持 |
+| 数学公式与 Mermaid | 已支持 |
 | 导出 PDF | 菜单「文件 → 导出 PDF」 |
 
 > 文档只在本机处理。远程图片默认不加载，网页链接会在系统浏览器中打开。
@@ -119,12 +121,60 @@ struct Reading {
         web?.find(query, configuration: config) { [weak self] result in self?.findStatus = result.matchFound ? "" : "未找到" }
     }
     func exportPDF() {
-        guard let web else { return }
+        guard web != nil else { return }
         let panel = NSSavePanel(); panel.allowedContentTypes = [.pdf]; panel.nameFieldStringValue = (fileURL?.deletingPathExtension().lastPathComponent ?? "Markdown") + ".pdf"
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        web.createPDF(configuration: WKPDFConfiguration()) { [weak self] result in
+        makePDF { [weak self] result in
             do { try result.get().write(to: url) } catch { self?.error = error.localizedDescription }
         }
+    }
+    // Waits until the page shows the current document and its latest render (diagrams included) has settled, then for
+    // images and fonts, and renders the page to PDF. Every wait has a time limit; running out of time, a script failure,
+    // or the page or document changing before the PDF is finished fails the export instead.
+    #if TESTING
+    var pdfWillCreate: (() -> Void)?
+    #endif
+    // Revision of the document the web view has finished loading and handed to the page (set by the coordinator).
+    var pageRevision = -1
+    func makePDF(_ completion: @escaping (Result<Data, Error>) -> Void) {
+        let failure = ReaderError.message("导出 PDF 失败：图表、图片或字体未能在限定时间内加载完成，或文档已切换。请稍后重试。")
+        guard let web else { completion(.failure(failure)); return }
+        let revision = revision, deadline = Date().addingTimeInterval(30)
+        let wait = """
+        const deadline=Date.now()+remaining,sleep=ms=>new Promise(r=>setTimeout(r,ms)),timeout=ms=>new Promise((_,reject)=>setTimeout(()=>reject(new Error('timeout')),Math.max(0,ms)));
+        const current=id=>window.readerRevision===revision&&window.readerRenderId===id;
+        for(;;){if(Date.now()>deadline)throw new Error('timeout');if(window.readerRevision!==revision){await sleep(50);continue}
+        const id=window.readerRenderId;await Promise.race([window.readerReady,timeout(Math.min(15000,deadline-Date.now()))]);if(!current(id))continue;
+        const images=[...document.images];for(const img of images)img.loading='eager';
+        await Promise.race([Promise.all(images.map(i=>i.decode().catch(()=>{}))),timeout(Math.min(10000,deadline-Date.now()))]);
+        await Promise.race([document.fonts.ready,timeout(Math.min(5000,deadline-Date.now()))]);if(Date.now()>deadline)throw new Error('timeout');if(current(id))return id}
+        """
+        let stillCurrent = { (renderId: Int, done: @escaping (Bool) -> Void) in
+            web.callAsyncJavaScript("return window.readerRevision===revision&&window.readerRenderId===renderId", arguments: ["revision": revision, "renderId": renderId], in: nil, in: .page) { [weak self] result in
+                if case .success(let value) = result, value as? Bool == true, self?.revision == revision { done(true) } else { done(false) }
+            }
+        }
+        // Run the page-side wait only once the web view has loaded this document, so the page cannot be replaced
+        // under it unless the document itself changes; any script failure, timeouts included, is then final.
+        func attempt() {
+            let remaining = Int(deadline.timeIntervalSinceNow * 1000)
+            web.callAsyncJavaScript(wait, arguments: ["revision": revision, "remaining": remaining], in: nil, in: .page) { [weak self] result in
+                // The page measures its own deadline from when the script starts; re-check the original one here too.
+                guard let self, self.revision == revision, deadline.timeIntervalSinceNow > 0, case .success(let value) = result, let renderId = (value as? NSNumber)?.intValue else { completion(.failure(failure)); return }
+                #if TESTING
+                self.pdfWillCreate?()
+                #endif
+                web.createPDF(configuration: WKPDFConfiguration()) { pdf in
+                    stillCurrent(renderId) { current in completion(current ? pdf : .failure(failure)) }
+                }
+            }
+        }
+        func waitForPage() {
+            if pageRevision == revision { attempt() }
+            else if self.revision != revision || deadline.timeIntervalSinceNow <= 0 { completion(.failure(failure)) }
+            else { DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in if self != nil { waitForPage() } else { completion(.failure(failure)) } } }
+        }
+        waitForPage()
     }
 }
 enum ReaderError: LocalizedError { case message(String); var errorDescription: String? { if case .message(let s) = self { return s }; return nil } }
@@ -211,21 +261,29 @@ struct ReadingWebView: NSViewRepresentable {
     }
     @MainActor final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         let model: ReaderModel; let images = LocalImages(); var lastRevision = -1
+        // The text and revision of the most recent load, tied to its navigation so a late didFinish from an earlier
+        // load cannot render this document into a stale page.
+        var pending: (navigation: WKNavigation?, text: String, revision: Int)?
         init(_ model: ReaderModel) { self.model = model }
         func load(_ web: WKWebView) {
-            lastRevision = model.revision; images.root = model.fileURL?.deletingLastPathComponent()
+            lastRevision = model.revision; pending = nil; images.root = model.fileURL?.deletingLastPathComponent()
             guard let dir = Bundle.main.resourceURL,
                   var html = try? String(contentsOf: dir.appendingPathComponent("reader.html"), encoding: .utf8) else { model.error = "阅读模板缺失，请重新安装应用。"; return }
             let nonce = UUID().uuidString
             html = html.replacingOccurrences(of: "__NONCE__", with: nonce)
-            for (token,name) in [("__MARKED__","marked.js"),("__PURIFY__","purify.js"),("__HIGHLIGHT__","highlight.js")] {
+            // Mermaid is large (about 5 MB), so it is only inlined for documents that mention it.
+            let needsMermaid = model.markdown.range(of: "mermaid", options: .caseInsensitive) != nil
+            if !needsMermaid { html = html.replacingOccurrences(of: "__MERMAID__", with: "") }
+            for (token,name) in [("__MARKED__","marked.js"),("__PURIFY__","purify.js"),("__HIGHLIGHT__","highlight.js"),("__KATEX_CSS__","katex.css"),("__KATEX__","katex.js")] + (needsMermaid ? [("__MERMAID__","mermaid.js")] : []) {
                 guard let js = try? String(contentsOf: dir.appendingPathComponent("vendor/" + name), encoding: .utf8) else { model.error = "离线组件缺失：" + name; return }
                 html = html.replacingOccurrences(of: token, with: js)
             }
-            web.loadHTMLString(html, baseURL: URL(string: "reader://document/"))
+            pending = (web.loadHTMLString(html, baseURL: URL(string: "reader://document/")), model.markdown, model.revision)
         }
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            webView.callAsyncJavaScript("window.renderMarkdown(text);window.setAppearance(theme,size)", arguments: ["text": model.markdown, "theme": ReaderSettings.shared.theme, "size": ReaderSettings.shared.fontSize], in: nil, in: .page) { [weak self] result in
+            guard let pending, pending.navigation === navigation else { return }
+            webView.callAsyncJavaScript("window.renderMarkdown(text,revision);window.setAppearance(theme,size)", arguments: ["text": pending.text, "revision": pending.revision, "theme": ReaderSettings.shared.theme, "size": ReaderSettings.shared.fontSize], in: nil, in: .page) { [weak self] result in
+                if case .success = result { self?.model.pageRevision = pending.revision }
                 if case .failure(let error) = result { self?.model.error = "文档渲染失败：" + error.localizedDescription }
             }
         }

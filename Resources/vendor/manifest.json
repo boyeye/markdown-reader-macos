@@ -2,16 +2,49 @@
   {
     "package": "marked",
     "version": "18.1.1",
-    "source": "https://cdn.jsdelivr.net/npm/marked@18.1.1/lib/marked.umd.js"
+    "source": "https://cdn.jsdelivr.net/npm/marked@18.1.1/lib/marked.umd.js",
+    "sha256": {
+      "marked.js": "b82b9334406d8bdd16b6236c08de1cb65b2a859873ca9503d9cc0b292ca3c12a"
+    }
   },
   {
     "package": "dompurify",
     "version": "3.4.17",
-    "source": "https://cdn.jsdelivr.net/npm/dompurify@3.4.17/dist/purify.min.js"
+    "source": "https://cdn.jsdelivr.net/npm/dompurify@3.4.17/dist/purify.min.js",
+    "sha256": {
+      "purify.js": "cd37898f9782adf54820c413191b5691803f0f137c799d6edcfd38523b4c2c31"
+    }
   },
   {
     "package": "@highlightjs/cdn-assets",
     "version": "11.12.0",
-    "source": "https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.12.0/highlight.min.js"
+    "source": "https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.12.0/highlight.min.js",
+    "sha256": {
+      "highlight.js": "8ab71eb09c51f501e5e25157d9cff100e46cc29bcbfc744d0b746d451fca7f53"
+    }
+  },
+  {
+    "package": "katex",
+    "version": "0.19.0",
+    "source": "https://registry.npmjs.org/katex/-/katex-0.19.0.tgz",
+    "files": {
+      "katex.js": "dist/katex.min.js",
+      "katex.css": "dist/katex.min.css with woff2 fonts embedded by inline_katex_fonts.py"
+    },
+    "sha256": {
+      "katex.js": "103a53763cc033bba8d175bf3f0ba597c3505c9b6747dd3f2c7bc2a6bfcc8ae7",
+      "katex.css": "c6457047d81b045d962c90ec3a2a690a46789d820b0a6d85ecabe5369621771a"
+    }
+  },
+  {
+    "package": "mermaid",
+    "version": "12.2.0",
+    "source": "https://registry.npmjs.org/mermaid/-/mermaid-12.2.0.tgz",
+    "files": {
+      "mermaid.js": "dist/mermaid.min.js"
+    },
+    "sha256": {
+      "mermaid.js": "a8a6a6f805b074a8261a2825c86f99c8054acb3b35f50bb7e24a4f9f2c3c3b9f"
+    }
   }
 ]

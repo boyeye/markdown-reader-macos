@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 from pathlib import Path
 import tempfile,subprocess,plistlib,hashlib
-from toolchain import VERSION
+from toolchain import VERSION,check_template
+check_template()
 root=Path(__file__).resolve().parent
 out=root/'dist';out.mkdir(exist_ok=True)
 dmg=out/f'MarkdownViewer-{VERSION}-arm64.dmg'
@@ -16,7 +17,7 @@ with tempfile.TemporaryDirectory(prefix='markdown-dmg-') as tmp:
 适用于 Apple Silicon（M 系列）Mac，macOS 13 或更新版本。Intel Mac 不适用。
 未使用付费 Developer ID 签名，未经 Apple 公证；若首次启动被拦截，在尝试打开后前往“系统设置 → 隐私与安全性 → 仍要打开”，仅对你信任的本安装包操作。
 
-功能：打开或拖入 .md/.markdown/.txt；多窗口与标签页（再次打开已打开的文件会切换到它所在的标签）；Finder 打开方式；大纲导航；代码高亮；表格与任务列表；本地图片；查找；源码查看；主题和字号；最近打开；PDF 导出。
+功能：打开或拖入 .md/.markdown/.txt；多窗口与标签页（再次打开已打开的文件会切换到它所在的标签）；Finder 打开方式；大纲导航；代码高亮；表格与任务列表；数学公式（KaTeX）；Mermaid 图表；本地图片；查找；源码查看；主题和字号；最近打开；PDF 导出。
 快捷键：⌘O 打开，⌘T 新建标签页，⌘N 新建窗口，⌘F 查找，⌘R 重新载入。文档修改后手动重新载入。
 本地图片支持文档目录及其子目录中的 PNG/JPG/GIF/WebP/HEIC/AVIF；不加载远程图片、SVG 或目录外图片。网页链接交由系统浏览器打开。
 仅阅读，不修改源文件。单文件上限 5 MB，本地单张图片上限 20 MB。
@@ -29,7 +30,7 @@ mounts=[e['mount-point'] for e in plistlib.loads(result.stdout)['system-entities
 try:
     for m in mounts:
         app=Path(m)/'Markdown 查看器.app'
-        assert (app/'Contents/Resources/vendor/purify.js').is_file()
+        assert all((app/'Contents/Resources/vendor'/f).is_file() for f in ('purify.js','katex.js','katex.css','mermaid.js'))
         assert (app/'Contents/Resources/reader.html').is_file()
         assert (Path(m)/'Applications').is_symlink()
         subprocess.run(['codesign','--verify','--strict','--verbose=2',str(app)],check=True)
