@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 import Combine
 
 struct Heading: Identifiable { let id: String; let title: String; let level: Int }
-let welcome = #"""
+let welcomeFallback = #"""
 # 欢迎使用 Markdown 查看器
 
 让文字回到阅读本身。
@@ -47,6 +47,9 @@ struct Reading {
 - [ ] 打开你的第一篇 Markdown
 """#
 
+let welcome = Bundle.main.url(forResource: "Welcome", withExtension: "md")
+    .flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? welcomeFallback
+
 // Appearance and recent files are app-wide; every window observes the same settings.
 @MainActor final class ReaderSettings: ObservableObject {
     static let shared = ReaderSettings()
@@ -79,7 +82,7 @@ struct Reading {
     weak var web: WKWebView?
     weak var window: NSWindow?
     private var appearance: AnyCancellable?
-    var title: String { fileURL?.lastPathComponent ?? "欢迎" }
+    var title: String { fileURL?.lastPathComponent ?? String(localized: "欢迎") }
     init() {
         // @Published emits before the stored value changes, so apply the emitted values directly.
         appearance = ReaderSettings.shared.$theme.combineLatest(ReaderSettings.shared.$fontSize).dropFirst()
@@ -93,11 +96,11 @@ struct Reading {
     }
     static func read(_ url: URL) throws -> String {
         let attrs = try url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
-        guard attrs.isRegularFile == true else { throw ReaderError.message("请选择 Markdown 或文本文件。") }
-        guard ["md", "markdown", "txt", "mdown", "mkd"].contains(url.pathExtension.lowercased()) else { throw ReaderError.message("支持 .md、.markdown 和 .txt 文件。") }
-        guard (attrs.fileSize ?? 0) <= 5_000_000 else { throw ReaderError.message("文件超过 5 MB，请先使用文本编辑器拆分。") }
+        guard attrs.isRegularFile == true else { throw ReaderError.message(String(localized: "请选择 Markdown 或文本文件。")) }
+        guard ["md", "markdown", "txt", "mdown", "mkd"].contains(url.pathExtension.lowercased()) else { throw ReaderError.message(String(localized: "支持 .md、.markdown 和 .txt 文件。")) }
+        guard (attrs.fileSize ?? 0) <= 5_000_000 else { throw ReaderError.message(String(localized: "文件超过 5 MB，请先使用文本编辑器拆分。")) }
         let data = try Data(contentsOf: url)
-        guard let text = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .utf16) else { throw ReaderError.message("无法读取文字编码，请将文件另存为 UTF-8。") }
+        guard let text = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .utf16) else { throw ReaderError.message(String(localized: "无法读取文字编码，请将文件另存为 UTF-8。")) }
         return text
     }
     func open(_ url: URL) {
@@ -118,7 +121,7 @@ struct Reading {
     func find(backwards: Bool = false) {
         guard !query.isEmpty else { findStatus = ""; return }
         let config = WKFindConfiguration(); config.backwards = backwards; config.wraps = true
-        web?.find(query, configuration: config) { [weak self] result in self?.findStatus = result.matchFound ? "" : "未找到" }
+        web?.find(query, configuration: config) { [weak self] result in self?.findStatus = result.matchFound ? "" : String(localized: "未找到") }
     }
     func exportPDF() {
         guard web != nil else { return }
@@ -137,7 +140,7 @@ struct Reading {
     // Revision of the document the web view has finished loading and handed to the page (set by the coordinator).
     var pageRevision = -1
     func makePDF(_ completion: @escaping (Result<Data, Error>) -> Void) {
-        let failure = ReaderError.message("导出 PDF 失败：图表、图片或字体未能在限定时间内加载完成，或文档已切换。请稍后重试。")
+        let failure = ReaderError.message(String(localized: "导出 PDF 失败：图表、图片或字体未能在限定时间内加载完成，或文档已切换。请稍后重试。"))
         guard let web else { completion(.failure(failure)); return }
         let revision = revision, deadline = Date().addingTimeInterval(30)
         let wait = """
@@ -247,6 +250,20 @@ struct ReadingWebView: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(model) }
     func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration(); config.websiteDataStore = .nonPersistent()
+        let readerStrings = [
+            "mermaidFailed": String(localized: "Mermaid 图表无法渲染："),
+            "unknownError": String(localized: "未知错误"),
+            "remoteImage": String(localized: "图片未加载："),
+            "unknownImage": String(localized: "未知图片"),
+            "remoteImageHint": String(localized: "（仅支持文档目录内的本地图片）"),
+            "localImageFailed": String(localized: "无法加载本地图片："),
+            "diagramSkipped": String(localized: "图表数量或大小超出上限，以下按源码显示。")
+        ]
+        let stringsData = try! JSONSerialization.data(withJSONObject: readerStrings)
+        let stringsJSON = String(decoding: stringsData, as: UTF8.self)
+            .replacingOccurrences(of: "\u{2028}", with: "\\u2028")
+            .replacingOccurrences(of: "\u{2029}", with: "\\u2029")
+        config.userContentController.addUserScript(WKUserScript(source: "window.readerStrings=Object.freeze(\(stringsJSON));", injectionTime: .atDocumentStart, forMainFrameOnly: true))
         config.setURLSchemeHandler(context.coordinator.images, forURLScheme: "reader")
         config.userContentController.add(context.coordinator, name: "outline")
         let web = WKWebView(frame: .zero, configuration: config)
@@ -268,14 +285,14 @@ struct ReadingWebView: NSViewRepresentable {
         func load(_ web: WKWebView) {
             lastRevision = model.revision; pending = nil; images.root = model.fileURL?.deletingLastPathComponent()
             guard let dir = Bundle.main.resourceURL,
-                  var html = try? String(contentsOf: dir.appendingPathComponent("reader.html"), encoding: .utf8) else { model.error = "阅读模板缺失，请重新安装应用。"; return }
+                  var html = try? String(contentsOf: dir.appendingPathComponent("reader.html"), encoding: .utf8) else { model.error = String(localized: "阅读模板缺失，请重新安装应用。"); return }
             let nonce = UUID().uuidString
             html = html.replacingOccurrences(of: "__NONCE__", with: nonce)
             // Mermaid is large (about 5 MB), so it is only inlined for documents that mention it.
             let needsMermaid = model.markdown.range(of: "mermaid", options: .caseInsensitive) != nil
             if !needsMermaid { html = html.replacingOccurrences(of: "__MERMAID__", with: "") }
             for (token,name) in [("__MARKED__","marked.js"),("__PURIFY__","purify.js"),("__HIGHLIGHT__","highlight.js"),("__KATEX_CSS__","katex.css"),("__KATEX__","katex.js")] + (needsMermaid ? [("__MERMAID__","mermaid.js")] : []) {
-                guard let js = try? String(contentsOf: dir.appendingPathComponent("vendor/" + name), encoding: .utf8) else { model.error = "离线组件缺失：" + name; return }
+                guard let js = try? String(contentsOf: dir.appendingPathComponent("vendor/" + name), encoding: .utf8) else { model.error = String(localized: "离线组件缺失：\(name)"); return }
                 html = html.replacingOccurrences(of: token, with: js)
             }
             pending = (web.loadHTMLString(html, baseURL: URL(string: "reader://document/")), model.markdown, model.revision)
@@ -284,7 +301,7 @@ struct ReadingWebView: NSViewRepresentable {
             guard let pending, pending.navigation === navigation else { return }
             webView.callAsyncJavaScript("window.renderMarkdown(text,revision);window.setAppearance(theme,size)", arguments: ["text": pending.text, "revision": pending.revision, "theme": ReaderSettings.shared.theme, "size": ReaderSettings.shared.fontSize], in: nil, in: .page) { [weak self] result in
                 if case .success = result { self?.model.pageRevision = pending.revision }
-                if case .failure(let error) = result { self?.model.error = "文档渲染失败：" + error.localizedDescription }
+                if case .failure(let error) = result { self?.model.error = String(localized: "文档渲染失败：\(error.localizedDescription)") }
             }
         }
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
@@ -378,7 +395,7 @@ struct ReaderView: View {
                 }
                 Divider()
                 HStack {
-                    Text(model.fileURL == nil ? "打开或拖入 Markdown 文件" : model.fileURL!.path).lineLimit(1).truncationMode(.middle)
+                    Text(model.fileURL == nil ? String(localized: "打开或拖入 Markdown 文件") : model.fileURL!.path).lineLimit(1).truncationMode(.middle)
                     Spacer(); Text("\(model.markdown.count) 字符"); Text("本机阅读").foregroundStyle(.tertiary)
                 }.font(.caption).foregroundStyle(.secondary).padding(.horizontal, 14).padding(.vertical, 7)
             }
@@ -390,7 +407,7 @@ struct ReaderView: View {
                 Button { model.openPanel() } label: { Label("打开文件", systemImage: "folder") }.help("打开文件 ⌘O")
                 Button { model.reload() } label: { Label("重新载入", systemImage: "arrow.clockwise") }.disabled(model.fileURL == nil)
                 Button { model.showFind.toggle() } label: { Label("查找", systemImage: "magnifyingglass") }
-                Button { model.showSource.toggle() } label: { Label(model.showSource ? "阅读预览" : "查看源码", systemImage: model.showSource ? "doc.richtext" : "chevron.left.forwardslash.chevron.right") }
+                Button { model.showSource.toggle() } label: { Label(model.showSource ? String(localized: "阅读预览") : String(localized: "查看源码"), systemImage: model.showSource ? "doc.richtext" : "chevron.left.forwardslash.chevron.right") }
                 Menu {
                     Picker("外观", selection: $settings.theme) { Text("跟随系统").tag("system"); Text("浅色").tag("light"); Text("深色").tag("dark") }
                     Divider()
@@ -408,7 +425,7 @@ struct ReaderView: View {
         .onDrop(of: [UTType.fileURL], isTargeted: $targeted) { providers in
             for provider in providers {
                 _ = provider.loadObject(ofClass: URL.self) { url, error in
-                    Task { @MainActor in if let url { WindowRouter.open(url, from: model) } else { model.error = error?.localizedDescription ?? "无法读取拖入的文件。" } }
+                    Task { @MainActor in if let url { WindowRouter.open(url, from: model) } else { model.error = error?.localizedDescription ?? String(localized: "无法读取拖入的文件。") } }
                 }
             }
             return !providers.isEmpty

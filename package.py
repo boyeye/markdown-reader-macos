@@ -23,6 +23,18 @@ with tempfile.TemporaryDirectory(prefix='markdown-dmg-') as tmp:
 仅阅读，不修改源文件。单文件上限 5 MB，本地单张图片上限 20 MB。
 第三方组件与许可证位于应用包 Contents/Resources/vendor。
 ''')
+    (stage/'Read Me.txt').write_text(f'''Markdown Viewer {VERSION}
+
+Installation: Drag Markdown 查看器.app into Applications, then open it from Applications.
+For Apple Silicon (M-series) Macs running macOS 13 or later. Intel Macs are not supported.
+This app is not signed with a paid Developer ID and has not been notarized by Apple. If the first launch is blocked, after attempting to open it go to “System Settings → Privacy & Security → Open Anyway”. Only do this for an installation package you trust.
+
+Features: Open or drop .md/.markdown/.txt files; multiple windows and tabs (opening an already-open file switches to its tab); Finder Open With; outline navigation; syntax highlighting; tables and task lists; math formulas (KaTeX); Mermaid diagrams; local images; find; source view; themes and font sizes; recent files; PDF export.
+Shortcuts: ⌘O open, ⌘T new tab, ⌘N new window, ⌘F find, ⌘R reload. Reload manually after modifying a document.
+Local images: PNG/JPG/GIF/WebP/HEIC/AVIF within the document directory and its subdirectories. Remote images, SVG, and images outside that directory are not loaded. Web links open in the system browser.
+Read-only: source files are not modified. Maximum file size: 5 MB; maximum individual local image size: 20 MB.
+Third-party components and licenses are in Contents/Resources/vendor inside the app bundle.
+''')
     subprocess.run(['hdiutil','create','-volname','Markdown 查看器','-srcfolder',str(stage),'-format','UDZO','-o',str(dmg)],check=True)
 subprocess.run(['hdiutil','verify',str(dmg)],check=True)
 result=subprocess.run(['hdiutil','attach','-readonly','-nobrowse','-plist',str(dmg)],check=True,capture_output=True)
