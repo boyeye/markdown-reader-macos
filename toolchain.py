@@ -2,8 +2,8 @@
 from pathlib import Path
 import os,re,subprocess
 ROOT=Path(__file__).resolve().parent
-VERSION='1.2'
-BUILD='12'
+VERSION='1.3'
+BUILD='13'
 
 def sdk_path():
     """Command Line Tools ship no SwiftUI macro plugin, but macOS 27+ SDKs implement @State as a macro.

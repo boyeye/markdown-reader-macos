@@ -9,11 +9,12 @@ dmg=out/f'MarkdownViewer-{VERSION}-arm64.dmg'
 if dmg.exists(): raise SystemExit('DMG already exists; move it aside before rebuilding.')
 with tempfile.TemporaryDirectory(prefix='markdown-dmg-') as tmp:
     stage=Path(tmp)
-    subprocess.run(['ditto',str(root/'MarkdownReader.app'),str(stage/'Markdown 查看器.app')],check=True)
+    subprocess.run(['ditto',str(root/'MarkdownReader.app'),str(stage/'Markdown Viewer.app')],check=True)
     (stage/'Applications').symlink_to('/Applications',target_is_directory=True)
     (stage/'使用说明.txt').write_text(f'''Markdown 查看器 {VERSION}
 
-安装：将 Markdown 查看器.app 拖入 Applications（应用程序），再从应用程序打开。
+安装：将 Markdown Viewer.app 拖入 Applications（应用程序），再从应用程序打开。
+从旧版升级：先删除“应用程序”中的「Markdown 查看器.app」，再拖入新版。
 适用于 Apple Silicon（M 系列）Mac，macOS 13 或更新版本。Intel Mac 不适用。
 未使用付费 Developer ID 签名，未经 Apple 公证；若首次启动被拦截，在尝试打开后前往“系统设置 → 隐私与安全性 → 仍要打开”，仅对你信任的本安装包操作。
 
@@ -25,7 +26,8 @@ with tempfile.TemporaryDirectory(prefix='markdown-dmg-') as tmp:
 ''')
     (stage/'Read Me.txt').write_text(f'''Markdown Viewer {VERSION}
 
-Installation: Drag Markdown 查看器.app into Applications, then open it from Applications.
+Installation: Drag Markdown Viewer.app into Applications, then open it from Applications.
+Upgrading: first delete the old "Markdown 查看器.app" from Applications, then drag in the new version.
 For Apple Silicon (M-series) Macs running macOS 13 or later. Intel Macs are not supported.
 This app is not signed with a paid Developer ID and has not been notarized by Apple. If the first launch is blocked, after attempting to open it go to “System Settings → Privacy & Security → Open Anyway”. Only do this for an installation package you trust.
 
@@ -35,13 +37,13 @@ Local images: PNG/JPG/GIF/WebP/HEIC/AVIF within the document directory and its s
 Read-only: source files are not modified. Maximum file size: 5 MB; maximum individual local image size: 20 MB.
 Third-party components and licenses are in Contents/Resources/vendor inside the app bundle.
 ''')
-    subprocess.run(['hdiutil','create','-volname','Markdown 查看器','-srcfolder',str(stage),'-format','UDZO','-o',str(dmg)],check=True)
+    subprocess.run(['hdiutil','create','-volname','Markdown Viewer','-srcfolder',str(stage),'-format','UDZO','-o',str(dmg)],check=True)
 subprocess.run(['hdiutil','verify',str(dmg)],check=True)
 result=subprocess.run(['hdiutil','attach','-readonly','-nobrowse','-plist',str(dmg)],check=True,capture_output=True)
 mounts=[e['mount-point'] for e in plistlib.loads(result.stdout)['system-entities'] if 'mount-point' in e]
 try:
     for m in mounts:
-        app=Path(m)/'Markdown 查看器.app'
+        app=Path(m)/'Markdown Viewer.app'
         assert all((app/'Contents/Resources/vendor'/f).is_file() for f in ('purify.js','katex.js','katex.css','mermaid.js'))
         assert (app/'Contents/Resources/reader.html').is_file()
         assert (Path(m)/'Applications').is_symlink()
